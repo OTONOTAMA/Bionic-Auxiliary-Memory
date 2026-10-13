@@ -1,7 +1,7 @@
 # Distribution files must retain the exact bytes pinned by MANIFEST.sha256.
 package/** -text
 dist/** -text
-README.md text eol=lf
-LICENSE text eol=lf
-RELEASE_NOTES.md text eol=lf
+/README.md text eol=lf
+/LICENSE text eol=lf
+/RELEASE_NOTES.md text eol=lf
 tools/*.py text eol=lf
