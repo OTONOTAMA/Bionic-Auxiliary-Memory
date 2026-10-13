@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+# User memory, installation state and local test artifacts must never be published.
+memory/
+receipts/
+evidence/
+local-tests/
