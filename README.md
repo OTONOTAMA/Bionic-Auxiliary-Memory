@@ -1,25 +1,90 @@
-# Bionic Auxiliary Memory
+# Bionic Auxiliary Memory (BAM)
 
-Selected, file-based auxiliary memory for **Bionic on Windows** (personal use, single
-user, no network, no host hooks).
+**Small, file-based memory for Bionic on Windows.**
 
-Long conversations, context compaction and handoffs make useful information hard to
-recover. BAM stores selected records as UTF-8 markdown under a memory root and exposes
-five machine-checked operations (Bootstrap / Status / Validate / Commit / Demote)
-through one PowerShell tool. Every failure returns a machine code plus a hint that
-states the next move, which supports operation by weak local LLMs (support by design,
-not a capability guarantee); a session is never blocked by memory (Bootstrap is
-fail-open). It does **not** save whole conversations and it never stores GO / approval /
-execution authority.
+Keep selected facts, preferences and decisions available across long conversations,
+context compaction and handoffs. BAM stores them as readable Markdown files and
+provides a PowerShell tool to load a compact summary, check integrity and publish
+updated summaries.
+
+**Current release: v0.7 · Windows PowerShell 5.1 · MIT license**
+
+[Download v0.7](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v0.7)
+· [Installation procedure](package/PROCEDURE.md)
+· [Daily usage](package/USAGE.md)
+· [Japanese version](#日本語)
+
+## What BAM does
+
+- Keeps selected facts, preferences, work policies, decisions and unverified
+  candidates in separate Markdown files.
+- Loads a compact `HOT_STATE` summary at session start, after compaction or on
+  handoff receipt. If the summary is stale or unverified, it points the AI to the
+  source files.
+- Checks file formats, size limits and integrity, and publishes updated summaries
+  through the adapter.
+- Moves older dated facts and decisions into an archive when needed.
+- Returns machine codes and Japanese recovery hints to help local LLMs follow
+  a predictable workflow.
+
+BAM saves selected information, not complete conversations. It does not include
+DEV_STATE or deep recall. Stored memory never grants approval or execution authority.
+
+## How you use it
+
+After installation, ask your Bionic AI:
+
+| Request | Purpose |
+| --- | --- |
+| Load auxiliary memory | Load the memory for this session. |
+| Update auxiliary memory | Update memory and publish a new summary. |
+| Enable chat memory | Enable memory for a selected chat. |
+
+The requests above express the intended actions in English. The bundled skill
+documents Japanese trigger phrases; English recognition depends on the model.
+Skill selection and automatic invocation are not guaranteed. The same operations
+can be run directly with PowerShell.
+
+## Where things live
+
+**Shared tools** — installed once and reused across workspaces.  
+Default: `%LOCALAPPDATA%\bam`
+
+**Project memory** — shared by chats using the same workspace.  
+Default: `<workspace>\memory`
+
+**Workspace skill and receipt** — instructions and exact installed paths.  
+Location: `<workspace>\.agents\skills\bam-memory`
+
+**Optional chat memory** — explicitly selected with `-ChatRoot`.  
+Location: `<scratchpad>\memory`
+
+`<workspace>` denotes the project folder; `<scratchpad>` denotes the chat working
+area. `-ToolDir` overrides the tool location. Chat-root selection is not remembered by
+the tool: pass `-ChatRoot` on each Bootstrap that needs it. Commit and Validate
+for chat memory use `-Root <chat root>`.
+
+Designed for personal use with a single writer. BAM itself needs no network or
+host hooks and does not synchronize files between users or PCs.
 
 ## Download and install
 
-The installation artifact is **bam-portable-v0.7.zip**, accompanied by
-`bam-portable-v0.7.zip.sha256`. Obtain both from
-[GitHub Releases](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v0.7).
-GitHub's automatic source ZIP is not the installation ZIP.
+Requirements: **Windows PowerShell 5.1** and **Bionic with shell execution**.
+The documented procedure requires no administrator rights or permanent execution
+policy change.
 
-Give the ZIP and checksum to your Bionic AI with this request:
+1. Download `bam-portable-v0.7.zip` and `bam-portable-v0.7.zip.sha256` from
+   [the v0.7 release](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v0.7).
+2. Extract the ZIP and read its `README.md`, `PROCEDURE.md` and `USAGE.md`.
+3. Follow the fixed sequence: `verify-artifact` → `check-target` → `install-mock`
+   → user approval → `install` → `status-report`.
+
+Use the release asset ZIP; GitHub's automatic **Source code** archive is not the
+installation package. `-ExpectedSha256` takes the hash value written in the
+sidecar, not its filename. Full commands are in
+[PROCEDURE.md](package/PROCEDURE.md).
+
+To have your Bionic AI perform the preparation, give it the ZIP and checksum with:
 
 > Read README.md, PROCEDURE.md and USAGE.md inside the package. Use the fixed commands
 > in PROCEDURE.md to verify the artifact, check the target workspace and run
@@ -28,171 +93,191 @@ Give the ZIP and checksum to your Bionic AI with this request:
 > instruction. Report the actual JSON output. I will make the final acceptance decision.
 > Ask me for the exact workspace path if it is not explicitly known.
 
-The detailed commands are in [package/PROCEDURE.md](package/PROCEDURE.md).
-A human can run the same commands without an LLM.
+## Operations and checks
 
-## Scope and requirements
+| Operation | Purpose |
+| --- | --- |
+| `Bootstrap` | Initialize memory or load its summary. |
+| `Status` | Show memory health and archive suggestions. |
+| `Validate` | Run the full integrity check. |
+| `Commit` | Validate and publish an updated summary. |
+| `Demote` | Archive older facts and decisions. |
 
-- Windows PowerShell 5.1; Bionic with shell execution. No administrator rights or
-  permanent security-setting changes are required by the documented flow.
-- The tool is installed once, globally, in `%LOCALAPPDATA%\bam` (the installer
-  `-ToolDir` overrides it) and is usable from any workspace or chat.
-- Memory is project-scoped by default: `<workspace>/memory`, shared by all chats of
-  that workspace. Per-chat memory is optional and explicit
-  (`-ChatRoot <scratchpad>/memory`).
-- The skill is placed as an ordinary file in
-  `<workspace>/.agents/skills/bam-memory` together with `INSTALL_RECEIPT.json` (exact
-  installed paths and hashes). Skill auto-selection is a soft trigger; it is not
-  guaranteed.
-- Local files are not synchronized across users or PCs.
-- Keep personal memory, credentials and test artifacts out of Git and public
-  repositories. This distribution contains no user memory data.
+Bootstrap normally lets the session continue even if memory is unavailable.
+Validate checks tracked files, encoding, size limits, summary headers and the manifest.
+Commit also updates the manifest.
 
-## What is included
+The installer runs a **33-case suite** in isolated staging. Its `status-report`
+checks installation placement and memory health; it does not replace the adapter's
+full `Validate` operation.
 
-Five operations (Bootstrap / Status / Validate / Commit / Demote) with machine codes
-and Japanese recovery hints; a 33-case machine suite; an installer (JSON 1-line
-output, exit 0/1/2, existing data stops the install); a skill template; a
-single-document specification (01_SPEC.md); and a one-shot v0.6 migration tool
-(bundled in the ZIP, not installed). Deep recall and DEV_STATE are not included.
-Neither the tool nor the memory grants execution authority.
+For repository maintainers, `python tools/verify_release.py` verifies the ZIP
+checksum, its nine manifest entries and exact equality between the ten packaged
+files and `package/`. It does not run the installer or test suite.
 
-## Important limits and safety
+## Limits and existing installations
 
-- Model capability varies. A weak local LLM may fail to install or use the tool
-  correctly. Machine checks and user acceptance are different; the user makes the final
-  decision. The fixed commands can be run by a human without an LLM.
-- Existing workspace directories or files stop installation (exit 2); nothing is ever
-  overwritten or merged. A shared tool dir whose tool files are byte-identical to this
-  package is reused (tool_dir_state=MATCHING); any other pre-existing tool dir stops
-  the install (exit 2, TOOL_DIR_CONFLICT).
-- **Uninstall is disabled.** Manual removal requires explicit user judgment, backups and
-  confirmation that the exact target files belong to this install.
-- FAIL/STOP is not success. Preserve the JSON output rather than weakening the test or
-  changing the target machine speculatively.
-- Do not store secrets or full transcripts in memory (spec FR-17 / FR-18).
-- A checksum verifies integrity, not publisher authenticity.
+- Local model capability varies. Fixed commands and machine checks help operation,
+  but do not guarantee that a model will follow the procedure correctly.
+- Existing target memory or skill data stops installation. Nothing is overwritten
+  or merged. A shared tool directory is reused only when its tool files match this
+  package byte for byte; conflicting or partial tool installations stop the install.
+- FAIL or STOP needs attention; preserve the output and follow the documented
+  procedure. A machine PASS and user acceptance are separate decisions.
+- Automatic uninstall is disabled. Manual removal needs backups and a check of
+  which workspaces still use the shared tools.
+- Keep secrets, complete transcripts and personal memory out of public repositories.
+  No user memory data is included in this distribution.
 
-## Verification status
+This release uses **BAM core v0.7** numbering. The earlier portable **v3.4** was a
+different package line; v0.7 introduces the rewritten layout. The
+[v3.4 release and assets](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v3.4)
+remain available. The bundled migration tool handles the legacy **v0.6 record
+format**; it is not a universal updater for every older installation.
 
-The author reports that v0.7 operates in the source environment (user-observed, not an
-independent certification of all LLM behavior). `python tools/verify_release.py`
-verifies ZIP checksum, manifest and exact source-to-ZIP byte identity; it does not
-rerun the installer or the machine suite.
+## Documentation and license
 
-`package/` is the exact source extracted from the delivered ZIP. `dist/` retains that
-ZIP unchanged. Do not hand-edit the ZIP or update only one copy; changes need manifest
-regeneration, the 33-case suite and a new artifact.
+- [Package overview and contents](package/README.md)
+- [Installation procedure](package/PROCEDURE.md)
+- [Daily usage and memory budgets](package/USAGE.md)
+- [Specification](package/01_SPEC.md)
+- [Release notes](RELEASE_NOTES.md)
 
-## License
-
-MIT. See [LICENSE](LICENSE). This is an independent community project, not an official
-Bionic or LM Studio product.
-
-## Version numbering and existing installations
-
-This release follows **BAM core v0.7** numbering. The earlier portable **v3.4**
-belongs to the previous package line; v0.7 is the rewritten layout, rather than a
-downgrade of that package. The [v3.4 release](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v3.4)
-and its original assets remain available.
-
-The install procedure is for a fresh workspace. Existing memory is never overwritten;
-an existing installation requires a separately verified migration plan. The bundled
-one-shot migration tool targets the legacy v0.6 record format; it is not a universal
-in-place updater for every older package.
-
-## Additional release verification
-
-Pre-publication review checked the exact release ZIP, manifest and source bytes,
-and exercised the 33-case suite through the installer in an isolated workspace.
-Separate regression probes confirmed that a blocked manifest replacement preserves
-the previous manifest and HOT_STATE, and that a missing required memory file causes
-status-report to fail. This does not certify Bionic Skill selection or every model.
-
-CLI note: Status may return `manifest=TRACKED_MISSING` and `manifest_missing`
-listing the missing required files. Full validation remains a separate operation.
+Released under the **[MIT License](LICENSE)**. This is an independent community
+project, not an official Bionic or LM Studio product.
 
 ---
 
-# Bionic Auxiliary Memory — 日本語
+# 日本語
 
-**Windows上のBionic向け、選択した情報をファイルに残す補助記憶です（個人利用・単一ユーザー・
-ネットワークなし・hostフックなし）。**
-長い会話・コンテキスト圧縮・ハンドオフ後に、保存済みの情報をPowerShellツールで
-Bootstrap / Status / Validate / Commit / Demote の5操作で扱えます。全失敗に機械コードと
-次の一手を記したヒント（hint_ja）が付くため、弱いローカルLLMでの運用を支援する設計です
-（動作保証ではありません）。セッションは記憶にブロックされません（Bootstrapは
-fail-open）。会話全文の保存は行わず、GO/承認/実行権限を保存することはありません。
+## Bionic Auxiliary Memory（BAM）
 
-## 導入の入口
+**Windows版Bionic向けの、小さなファイルベースの補助記憶です。**
 
-[GitHub Releases](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v0.7)
-から `bam-portable-v0.7.zip` と `.zip.sha256` を取得してください。GitHubの自動生成
-Source code ZIPは導入用ZIPではありません。ZIPとチェックサムをBionicのAIへ渡し、
-次のように依頼します。
+長い会話、コンテキスト圧縮、引継ぎをまたいで、選択した事実・好み・判断を参照できるように
+します。記憶は読めるMarkdownファイルとして保存し、PowerShellツールで短い要約の読込み、
+整合性確認、要約の更新を行います。
 
-> パッケージ内のREADME.md / PROCEDURE.md / USAGE.mdを読み、固定コマンドで配布物確認・
-> 対象確認・install-mockを実施してください。mockの結果を私が承認するまでインストール
-> しないでください。既存データの上書き、テスト・hash変更、合格基準の緩和、FAIL/STOP後の
-> 無断再試行は禁止です。実際のJSON出力を報告してください。最終受入は私が判断します。
-> workspaceの正確なパスが不明なら確認してください。
+**現行版：v0.7 · Windows PowerShell 5.1対応 · MITライセンス**
 
-詳細は [PROCEDURE.md](package/PROCEDURE.md)（英語）。人間も同じコマンドを実行できます。
+[v0.7をダウンロード](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v0.7)
+· [導入手順](package/PROCEDURE.md)
+· [日常の使い方](package/USAGE.md)
 
-## 対応環境・範囲
+## できること
 
-- Windows PowerShell 5.1と、shell実行可能なBionicが対象です。管理者権限や恒久的な
-  セキュリティ設定変更は不要です。
-- ツールはグローバルに1回配置（既定 `%LOCALAPPDATA%\bam`、installerの`-ToolDir`で
-  変更可）。どのworkspace・チャットからでも利用できます。
-- 記憶はプロジェクト単位が既定: `<workspace>/memory`（同一workspaceのチャット間で
-  共有）。チャット単位は明示指定（`-ChatRoot <scratchpad>/memory`）で有効化。
-- スキルは `<workspace>/.agents/skills/bam-memory` へ通常ファイルとして配置され、
-  `INSTALL_RECEIPT.json`（実配置パス・hash）が同居します。スキル自動選択は
-  soft triggerで、保証されません。
-- 別PC・別ユーザーとの自動同期はありません。
-- 個人記憶・認証情報・テスト成果物をGitや公開リポジトリに混入させないこと。本配布には
-  ユーザー記憶データは含まれません。
+- 事実、好み、作業方針、重要な判断、未確認の候補を、それぞれのMarkdownファイルに保存。
+- セッション開始時、圧縮後、引継ぎ受領時に、短い`HOT_STATE`要約を読込み。
+  要約が古い場合や未確認の場合は、元ファイルの参照先を案内。
+- ファイル形式・容量上限・整合性を確認し、アダプター経由で要約を更新。
+- 古い日付の事実や判断を、必要に応じてアーカイブへ移動。
+- 機械コードと日本語の復旧ヒントで、ローカルLLMの操作を支援。
 
-## 同梱内容
+保存対象は選択した情報です。会話全文の保存、DEV_STATE、過去情報の詳細検索は含みません。
+記憶に書かれた内容が、承認や実行権限になることもありません。
 
-5操作（機械コード + 日本語復旧ヒント付き）・33件機械試験suite・installer（JSON 1行
-出力・exit 0/1/2・既存データでSTOP）・スキル雛形・単一仕様書（01_SPEC.md）・v0.6
-移行用one-shotツール（ZIP同梱・installされない）。deep recallとDEV_STATEは含みません。
-ツールも記憶も実行認可を与えません。
+## 普段の使い方
 
-## 制約・注意
+導入後は、BionicのAIに次のように依頼します。
 
-- 弱いローカルLLMが導入や利用に失敗することがあります。機械試験PASSとユーザー受入は
-  別です。最終判断はユーザーが行います。固定コマンドは人間もLLMなしで実行できます。
-- 既存のworkspaceデータ（ファイル・ディレクトリ）はインストールをSTOP（exit 2）します。
-  上書き・マージは一切行いません。共有ツールディレクトリのツールが本パッケージと
-  byte一致の場合は再利用（tool_dir_state=MATCHING）し、それ以外はSTOP（exit 2、
-  TOOL_DIR_CONFLICT）します。
-- **自動撤去は無効です。** 手動撤去はユーザー判断・バックアップ・対象ファイルの所有
-  確認が必要です。
-- FAIL/STOPは成功ではありません。JSON出力を保持し、基準緩和や推測での環境変更を
-  しません。
-- 秘密情報・会話transcript全文は記憶に保存しないこと（仕様FR-17/FR-18）。
-- hashは真正性の保証ではなく整合性の確認です。
+| 依頼 | 用途 |
+| --- | --- |
+| 補助記憶ブートして | 今回使う記憶を読み込む。 |
+| 補助記憶に反映して | 記憶と要約を更新する。 |
+| チャット単位の補助記憶を有効に | 指定したチャットの記憶を使う。 |
 
-ソース環境でのv0.7稼働は作者のユーザー観測です（全LLM挙動の独立保証ではありません）。
-`python tools/verify_release.py` でZIP・チェックサム・MANIFEST・ソース一致を確認できます
-（installer・suiteの再実行は行いません）。`package/` は納品ZIPから展開した正確なソース、
-`dist/` はそのZIPの不変コピーです。ZIPは手編集せず、変更時はMANIFEST再生成・33件suite・
-新成果物をまとめて作成してください。
+これらは文書化された自然言語の呼び出し例です。スキルの選択はホストとモデルに依存するため、
+自動実行は保証されません。人間がPowerShellで直接操作することもできます。
 
-MITライセンス。Bionic/LM Studio公式製品ではありません。
+## 保存場所と共有範囲
 
-## 版番号と既存環境
+**共用ツール** — 一度配置し、複数の作業フォルダーから利用。  
+既定：`%LOCALAPPDATA%\bam`
 
-今回はBAM coreの版番号に合わせた **v0.7** です。従来のポータブル版 **v3.4** から
-構成を作り直したもので、単純なダウングレードではありません。旧v3.4のリリースと
-配布物も引き続き取得できます。
+**プロジェクト記憶** — 同じ作業フォルダーを使うチャット間で共有。  
+既定：`<workspace>\memory`
 
-導入手順は新しいworkspace向けです。既存の記憶は上書きしません。既存環境の移行には
-別途検証した計画が必要で、同梱のlegacy v0.6用ツールが全旧版を自動更新するわけでは
-ありません。
+**スキルと導入記録** — 作業フォルダー用の指示と、実際の導入先を記録。  
+配置先：`<workspace>\.agents\skills\bam-memory`
 
-公開前レビューでは33ケースを含む隔離導入と配布物の整合性を確認しました。
-実Bionicのスキル選択や、すべてのモデルの動作を保証するものではありません。
+**任意のチャット記憶** — `-ChatRoot`で明示して利用。  
+配置先：`<scratchpad>\memory`
+
+パス中の`<workspace>`は作業フォルダー、`<scratchpad>`はチャット用の作業領域です。
+ツールの配置先は`-ToolDir`で変更できます。チャットの選択はツール側に保持されないため、
+利用するBootstrapごとに`-ChatRoot`を渡します。チャット記憶へのCommit・Validateは
+`-Root <チャット記憶の保存先>`で実行します。
+
+個人利用・単一の書込み主体を想定しています。BAM自体はネットワークやホスト側のフックを必要とせず、
+別PC・別ユーザーとのファイル同期も行いません。
+
+## ダウンロードと導入
+
+必要なものは、**Windows PowerShell 5.1**と**シェルを実行できるBionic**です。
+文書の手順では、管理者権限や恒久的な実行ポリシー変更は不要です。
+
+1. [v0.7リリース](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v0.7)から
+   `bam-portable-v0.7.zip`と`bam-portable-v0.7.zip.sha256`を取得します。
+2. ZIPを展開し、中の`README.md`・`PROCEDURE.md`・`USAGE.md`を読みます。
+3. `verify-artifact` → `check-target` → `install-mock` → ユーザー承認 → `install`
+   → `status-report`の順に進めます。
+
+導入にはリリース添付のZIPを使ってください。GitHubが自動生成する**Source code**のZIPは
+導入用パッケージではありません。`-ExpectedSha256`に指定するのは、チェックサムファイルの名前ではなく、
+そこに書かれたハッシュ値です。具体的なコマンドは[PROCEDURE.md](package/PROCEDURE.md)にあります。
+
+BionicのAIに準備を依頼する場合は、ZIPとチェックサムを渡し、次のように伝えます。
+
+> パッケージ内のREADME.md・PROCEDURE.md・USAGE.mdを読み、PROCEDURE.mdの固定コマンドで
+> 配布物確認・対象作業フォルダー確認・install-mockを実施してください。模擬導入の結果を私が承認するまで
+> インストールしないでください。既存データの上書き、テスト・ハッシュの変更、合格基準の緩和、
+> FAIL/STOP後の無断再試行は禁止です。実際のJSON出力を報告してください。最終受入は私が判断します。
+> 作業フォルダーの正確なパスが不明なら確認してください。
+
+## 操作と検証
+
+| 依頼の例（対応する操作） | 内容 |
+| --- | --- |
+| 補助記憶を読み込んで（`Bootstrap`） | 記憶の初期化・要約の読込み。 |
+| 補助記憶の状態を確認して（`Status`） | 記憶の状態・アーカイブ推奨を表示。 |
+| 補助記憶の整合性を確認して（`Validate`） | ファイル・容量・整合性を完全検証。 |
+| この内容を補助記憶に反映して（`Commit`） | 更新した要約を検証・保存。 |
+| 古い記憶を整理して（`Demote`） | 古い事実や判断をアーカイブへ移動。 |
+
+上の依頼文は意図を伝える自然な言い方の例で、固定の呼び出し語ではありません。
+スキルに記載された呼び出し例は「普段の使い方」を参照してください。
+
+Bootstrapは通常、記憶を利用できなくてもセッションを継続します。Validateは管理対象ファイル、
+文字コード、容量、要約ヘッダー、整合性管理ファイルを検証し、Commitは要約と整合性管理ファイルを更新します。
+
+インストーラーは隔離した作業領域で**33ケースの試験**を実行します。`status-report`は導入先と
+記憶の簡易確認であり、アダプターの`Validate`による完全な整合性検証とは別です。
+
+公開物を確認する場合は、`python tools/verify_release.py`でZIPのチェックサム、整合性一覧の9項目、
+同梱10ファイルと`package/`のバイト一致を検証できます。このコマンドはインストーラーや試験一式を
+再実行しません。
+
+## 制約と既存環境について
+
+- ローカルモデルの能力には差があります。固定手順と機械検証で操作を支援しますが、
+  モデルが正しく手順を守ることまでは保証しません。
+- 対象の記憶やスキルが既に存在する場合は導入を停止し、上書き・マージしません。
+  共用ツールは本パッケージとバイト一致する場合だけ再利用します。不一致や一部のみの配置では停止します。
+- FAIL・STOP時は出力を保持し、文書の手順に従って対応します。機械検証のPASSとユーザーの受入判断は別です。
+- 自動アンインストールは無効です。手動削除の前にバックアップと、共用ツールを使う他の作業フォルダーの確認が必要です。
+- 秘密情報・会話全文・個人記憶を公開リポジトリに入れないでください。本配布物にユーザーの記憶データは含みません。
+
+今回は**BAM core v0.7**の版番号を使用しています。従来のポータブル**v3.4**とはパッケージの系統が異なり、
+構成を作り直した版です。[旧v3.4のリリースと配布物](https://github.com/OTONOTAMA/Bionic-Auxiliary-Memory/releases/tag/v3.4)も
+引き続き取得できます。同梱の移行ツールは旧**v0.6の記録形式**が対象で、すべての旧環境を
+自動更新する汎用アップデーターではありません。
+
+## 文書とライセンス
+
+- [パッケージ概要・同梱物](package/README.md)
+- [導入手順](package/PROCEDURE.md)
+- [日常操作・容量上限](package/USAGE.md)
+- [仕様書](package/01_SPEC.md)
+- [リリースノート](RELEASE_NOTES.md)
+
+**[MITライセンス](LICENSE)**で公開しています。Bionic・LM Studio公式製品ではない、独立したコミュニティプロジェクトです。
