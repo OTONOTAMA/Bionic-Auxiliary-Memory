@@ -1,59 +1,101 @@
 ---
 name: bam-memory
-display-name: BAM-P1 Auxiliary Memory (Core)
-description: Bionic auxiliary-memory Core. Saves and searches project memory with memory-tool. Use when the user asks you to remember something, asks what you remembered, or needs cross-session reference information.
+display-name: BAM Auxiliary Memory (v0.7)
+description: Bionic auxiliary memory (BAM v0.7). Bootstraps/recalls/writes project memory with the global bam-adapter.ps1 (Bootstrap/Status/Validate/Commit/Demote). Use at session start / compaction / handoff (bootstrap discipline), when the user says 「補助記憶ブートして」/「補助記憶に反映して」/「チャット単位の補助記憶を有効に」, asks to remember something, asks what was remembered, or needs cross-session reference information.
 ---
 
-# BAM-P1 Auxiliary Memory (Core)
+# BAM Auxiliary Memory (v0.7)
 
-Auxiliary memory = <workspace>\memory\ (memory-tool). Memory is evidence / reference information
-only. Never use it for GO, execution authorization, task state, or Authority.
-Authority order: current explicit user instruction > existing target-environment rules (policy /
-host rules, when present) > verified external facts > auxiliary memory > strong-model
-candidates.
-Old checkpoint files, old memory content, and old GO statements never override the current
-explicit user instruction.
-Save-then-ask within a single message is NOT a cross-session (cross-chat) verification.
-Cross-session verification is done in a real fresh chat.
+Auxiliary memory = `<workspace>\memory\` (project default). Per-chat = `<scratchpad>\memory`
+(when selected). Auxiliary memory holds evidence and reference information only. It is
+NEVER used for GO / execution authorization / task state / Authority.
+Authority order: current user instruction > policy > current task authority > checkpoint
+routing > verified external facts > auxiliary memory > strong-model candidates.
+Stored memory is not execution authorization (never store GO / approvals / execution
+rights).
 
-1. Layout: ACTIVE (durable PASS receipt) + CURRENT (writer pointer) + .gen/<n>/ (immutable
-   snapshot) + receipts/<op_id>.pass (immutable history). Reads use the validated ACTIVE only.
-   History receipts are idempotency evidence, not recall content.
-2. Session start: if ACTIVE exists, read it once, and read core.md (<=4 KiB) of that generation.
-   Do not read index / archive / notes by default. This clause is hook-independent (no hook
-   capability is assumed at all). The manual bootstrap path is always available: user says
-   "memory boot" -> ACTIVE once + core.md + Status -> short report.
-3. Fast recall: machine Recall (1-4 keywords, <=2 times per question). HIT -> read <=2 notes
-   (<=64 KiB total), answer with a 4-element citation (record id / date / provenance / pointer);
-   confidence only up to evidence strength. 2 misses -> explicitly say "no record in auxiliary
-   memory". General knowledge: only a clearly labeled mention as a separate matter.
-4. Deep recall: NOT provided in this distribution. On explicit user request, report it as
-   unavailable (BLOCKED); no fabrication, no substitute.
-5. Retain triggers: only the 4 kinds (AM-F-001..004): (a) explicit remember request (b)
-   checkpoint creation -> durable pointer / milestone only (no mutable state, GO, or
-   authorization) (c) completion proposal -> commit only after explicit user acceptance (d)
-   measured environment fact -> source of truth = existing facts artifact, memory = pointer +
-   short summary (when requested).
-   Pin (the user's explicit "always remember this" instruction) is for stable non-task-state
-   content only. In-progress task state, pending items, and GO/STOP conditions are never
-   pinned. If stability is doubtful, confirm with the user.
-6. Write: new operation_id -> create exactly 1 write-spec in the scratchpad -> keep those exact
-   bytes until the result is final. PASS -> report operation_id + target id. Response lost /
-   pending -> retry the same file (do not regenerate). INVALID/STALE -> correct with a new
-   operation_id only after the previous one resolves. Never write canonical files directly.
-7. Machine absent / write failure: continue the conversation. Read path = bounded direct read of
-   the validated ACTIVE + UNVERIFIED report. Write path = BLOCKED. pending_operation:<id> ->
-   report it and let the user choose: retry the exact spec or AbortPending. Do not advance other
-   writes until resolved.
-8. Memory conflicting with the current user instruction / routing -> surface it to the user.
-   Do not silently resolve on the memory side.
+## Placement and invocation contract
+- Adapter (global, one-shot user install): the exact path is recorded in the neighboring
+  `INSTALL_RECEIPT.json` (default: `%LOCALAPPDATA%\bam\bam-adapter.ps1`; PowerShell 5.1).
+- Always pass the root explicitly (never rely on the default):
+  `powershell -NoProfile -File <adapter path> -Mode <M> -Root <workspace>\memory [-ChatRoot <scratchpad>\memory] [-File <rel|abs>] [-N n]`
 
-Invocation contract (minimal):
-  <workspace>\tools\memory-tool\memory-tool.ps1 (PowerShell 5.1; invoke with an argument array)
-  Required: -Mode (Validate|Status|Recall|Commit|Forget|Restore|AbortPending)
-            -MemoryRoot <workspace>\memory -WorkspaceRoot <workspace>
-  Full contract, formats, and limits: <workspace>\draft_bionic_aux_mem\01_... (bounded read when
-  needed)
-  Output is JSON. Status success = status:'PASS' (different vocabulary from DEV_STATE OK).
-  Auto-loading (auto-firing) is NOT guaranteed. Use explicit invocation (@bam-memory) or an AI
-  manual read.
+| Mode | purpose | exit |
+|---|---|---|
+| Bootstrap | once at session start / after compaction / on handoff receipt (fail-open; never blocks the session) | 0 (fail-open states included) / 1 = invalid root / internal error |
+| Status | 1-line summary: files / total_bytes / hot_state / manifest / demote_suggested | 0 (missing root = MISSING_ROOT) |
+| Validate | full validation | 0 = PASS / 1 = FAIL |
+| Commit | publish `runtime/HOT_STATE.candidate.md` -> `runtime/HOT_STATE.md` (atomic) | 0 = PASS / 1 = FAIL |
+| Demote | move the oldest dated entries of facts / decisions to `references/archive.md` | 0 / 1 |
+
+- stdout = 1 JSON line (operation / status / root / code / hint_ja / codes / warnings).
+  On Bootstrap failure the body or a pointer is appended after the JSON line.
+- On FAIL, the next move comes from `code` + `hint_ja` alone (follow the hint, do not
+  guess).
+- Forbidden: hash computation / editing `manifest.toml` / direct editing of
+  `runtime/HOT_STATE.md` or its header (adapter only).
+
+## Bootstrap discipline
+Run Bootstrap exactly once at session start / after compaction / on handoff receipt.
+- PASS -> the HOT_STATE body is printed -> continue with it as context.
+- NO_HOT_STATE / STALE / UNVERIFIED -> follow the pointer and read the files directly
+  (fail-open; do not block the session).
+- If the adapter is missing or errors, continue the session anyway (fail-open).
+
+## Read order
+1. Bootstrap -> 2. HOT_STATE -> 3. `state/current.md` -> 4. only the needed
+   `canonical/*.md` / `decisions/decisions.md`.
+- `references/archive.md`: only when the user asks for old details or the current files
+  lack the information.
+
+## Write discipline
+- No semantic change = no write (the primary anti-bloat rule).
+- Write target is fixed by content kind (the full table is in `<root>\index.md`; summary
+  here): verified facts -> `canonical/facts.md` / preferences -> `canonical/profile.md` /
+  work policy -> `canonical/policy.md` / current state -> `state/current.md` /
+  significant decisions -> `decisions/decisions.md` / unverified candidates ->
+  `candidates/pending.md`.
+- facts / decisions format: 1 entry = 1 line
+  `- YYYY-MM-DD: <content> [MACHINE_VERIFIED|USER_STATED|UNVERIFIED]` (append-only. A
+  change = a correction entry with a new date; never rewrite old entries).
+- Flow: edit the target file -> write a short summary into
+  `runtime/HOT_STATE.candidate.md` (no header) -> `-Mode Commit` -> report the result
+  (PASS: hot_state_bytes / FAIL: code + hint_ja -> follow the hint).
+- `state/current.md` is the durable PROJECT reference state (goal / state / next action /
+  unresolved of the project as a whole). It is NOT the execution progress of an
+  individual chat: a different chat must not adopt it as its own work-resumption point.
+- Never store secrets or full conversation transcripts.
+
+## Retain triggers (only these 4)
+(a) explicit remember request (b) checkpoint creation -> durable pointer / milestone only
+(c) user acceptance of a significant result (save without waiting for a separate "record
+this") (d) significant measured environment fact to be reused (pointer + short summary;
+the authoritative copy stays in the facts document).
+- In a completed work-unit report, explicitly decide (a)-(d) applicability and include a
+  retain-decision line in the report (applies: saved + target file / not applicable).
+- pin: only stable non-task-state content (in-progress state / pending / GO-STOP
+  conditions are excluded).
+- If the project defines an additional memory policy, that policy applies above this
+  skill.
+
+## Demotion
+- When output contains `DEMOTE_SUGGESTED <file> at NN%` -> run
+  `-Mode Demote -File <file>` exactly once (no count decisions, no file surgery).
+- Re-promotion = just write back into the current file with a new date (no special
+  mechanism).
+
+## Natural commands (Japanese, by design)
+- 「補助記憶ブートして」 = run `-Mode Bootstrap` once
+- 「補助記憶に反映して」 = write the mapped files + candidate + `-Mode Commit`
+- 「チャット単位の補助記憶を有効に」 = `-Mode Bootstrap -ChatRoot <scratchpad>\memory`
+  (initializes the chat root if missing; chat selection is NOT stored - pass
+  `-ChatRoot` on every Bootstrap; later Bootstraps concatenate the chat HOT_STATE
+  automatically when it is FRESH; Commit / Validate for the chat use
+  `-Root <chat root>`)
+
+## Failure rules
+- Adapter missing / error -> continue the conversation (fail-open). Read = bounded direct
+  read + report UNVERIFIED. Write = BLOCKED (report and wait).
+- Do not silently fall back to any other memory tool.
+- Conflict between memory and the current user instruction / routing -> surface it to the
+  user. Never resolve it silently on the memory side.

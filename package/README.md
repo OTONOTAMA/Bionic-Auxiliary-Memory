@@ -1,138 +1,85 @@
-# BAM-P1 Auxiliary Memory (Core) - Portable Package
+# BAM v0.7 - Portable Package (bam-portable)
 
-- Distribution: bamp1-portable / 2026-10-13 (v3)
-- Design: v4 (draft_bam_portable_package_design_20261012_v4.md in the source scratchpad; not included in this ZIP)
-- Prerequisites: fresh Bionic (standard features only), Windows PowerShell 5.1, no admin rights required
+- Version: v0.7-portable (2026-10-22)
+- Built for: Bionic on Windows (personal use, single user, no network, no host hooks)
+- Prerequisites: Windows PowerShell 5.1, Bionic with shell execution, no admin rights
 
-## Overview
+## What this is
 
-Distributes the Bionic auxiliary-memory Core as a single ZIP.
-Scope (Core): retain / fast recall / lifecycle (supersede, forget, restore) / status / validate /
-write and integrity mechanism + the tool-side FilterDeepOut (a pure file filter, no offload
-required, machine-tested).
-Out of scope: the deep recall execution path (offload / strong model), live behavior that depends
-on the source environment L0-L3 discipline, and real-compaction-dependent cases. Deep recall is
-NOT provided in this distribution; on explicit request report it as unavailable (BLOCKED) (no
-fabrication, no substitute).
+BAM (Bionic Auxiliary Memory) is a small, file-based auxiliary memory for Bionic:
+selected records (facts, decisions, current state, preferences, candidates) stored as
+UTF-8 markdown under a memory root, with one PowerShell tool (bam-adapter.ps1) providing
+five machine-checked operations (Bootstrap / Status / Validate / Commit / Demote) and a
+33-case machine suite.
 
-## Provenance and authority
+It is designed to support operation by weak local LLMs (support by design, not a
+capability guarantee): every failure returns a machine code plus a Japanese hint
+(hint_ja) that states the next move, and the tool never blocks a session (Bootstrap is
+fail-open). It does NOT save whole conversations, and it never stores GO / approval /
+execution authority (by spec).
 
-- Frozen sources (source environment): REQ / 01..05 in this ZIP are distribution derivatives of
-  the frozen documents. Each document carries a provenance header and a DISTRIBUTION SCOPE
-  ADDENDUM that state source, version, change scope, and distribution authority.
-- The frozen sources remain unchanged in the source environment (this ZIP contains only
-  derivatives).
-- 06 / 07 (test and revision history of the source environment) are not included.
-- Authority: the frozen sources in the source environment remain the upstream authority. This
-  distribution is normative only within a distributed installation (see each document's
-  AUTHORITY_STATEMENT).
+## Layout (inside the ZIP)
 
-## Layout
+    bam-portable/
+    |- README.md                 this file
+    |- PROCEDURE.md              target-LLM-facing fixed commands + no-judgment rules
+    |- USAGE.md                  daily operation guide (modes, scope, budgets, failure rules)
+    |- install-bam.ps1           installer (subcommands; 1 JSON line output; exit 0/1/2)
+    |- MANIFEST.sha256           SHA256 of all files in this folder (self excluded, 9 lines)
+    |- bam-adapter.ps1           the tool (UTF-8 with BOM - required by PowerShell 5.1)
+    |- test-bam-adapter.ps1      33-case machine suite
+    |- migrate-legacy.ps1        one-shot v0.6 -> v0.7 migration tool (bundled, not installed)
+    |- 01_SPEC.md                specification (single document, English)
+    |- skill/bam-memory/SKILL.md skill template (installed as an ordinary file)
 
-    bamp1-portable/
-    |- README.md                 human-facing (this file)
-    |- PROCEDURE.md              target-LLM-facing (fixed commands + no-judgment rules)
-    |- MANIFEST.sha256           SHA256 of all ZIP files (self excluded, 12 lines)
-    |- bamp1.ps1                 install/verify script (single entry, subcommands)
-    |- skill/bam-memory/SKILL.md Core-only skill (common to project / global / none)
-    |- payload/
-       |- tools/memory-tool/     memory-tool.ps1 / test-memory-tool.ps1 (distribution variant, self-location)
-       |- draft_bionic_aux_mem/  REQ / 01..05 (distribution variants)
+Sidecar (outside the ZIP): `<zip name>.zip.sha256` - whole-ZIP SHA256, one line.
 
-Sidecar (1 file outside the ZIP): `<zip name>.sha256` (whole-ZIP SHA256, 1 line).
+## Install via AI (copy this to your Bionic)
 
-## Installation (fixed 5 commands; a human can run them directly without an LLM)
+> Read README.md, PROCEDURE.md and USAGE.md inside the package. Use the fixed commands
+> in PROCEDURE.md to verify the artifact, check the target workspace and run
+> install-mock. Do not install until I approve the mock results. Do not overwrite
+> existing data, modify tests or hashes, relax thresholds or retry FAIL/STOP without my
+> instruction. Report the actual JSON output. I will make the final acceptance decision.
+> Ask me for the exact workspace path if it is not explicitly known.
 
-    0. Extract the ZIP to any directory (Explorer or Expand-Archive)
-    1. powershell -NoProfile -ExecutionPolicy Bypass -File .\bamp1.ps1 verify-artifact -Zip <zip path> -ExpectedSha256 <sidecar value>
-    2. powershell -NoProfile -ExecutionPolicy Bypass -File .\bamp1.ps1 check-target -WorkspaceRoot <ws>
-    3. powershell -NoProfile -ExecutionPolicy Bypass -File .\bamp1.ps1 install-mock -WorkspaceRoot <ws>
-       -> check the report (mock selftest results) -> [user approval]
-    4. powershell -NoProfile -ExecutionPolicy Bypass -File .\bamp1.ps1 install -WorkspaceRoot <ws> -SkillMode project
-    5. powershell -NoProfile -ExecutionPolicy Bypass -File .\bamp1.ps1 status-report
+## Manual install (no LLM)
 
-rollback:
+    0. Extract the ZIP anywhere.
+    1. powershell -NoProfile -ExecutionPolicy Bypass -File .\install-bam.ps1 verify-artifact -Zip <zip> -ExpectedSha256 <sidecar>
+    2. powershell -NoProfile -ExecutionPolicy Bypass -File .\install-bam.ps1 check-target -Zip <zip> -ExpectedSha256 <sidecar> -WorkspaceRoot <ws>
+    3. powershell -NoProfile -ExecutionPolicy Bypass -File .\install-bam.ps1 install-mock -Zip <zip> -ExpectedSha256 <sidecar> -WorkspaceRoot <ws>
+    4. powershell -NoProfile -ExecutionPolicy Bypass -File .\install-bam.ps1 install -Zip <zip> -ExpectedSha256 <sidecar> -WorkspaceRoot <ws>
+    5. powershell -NoProfile -ExecutionPolicy Bypass -File .\install-bam.ps1 status-report -WorkspaceRoot <ws>
 
-    UNINSTALL IS DISABLED IN THIS BUILD. Running
-    `powershell -NoProfile -ExecutionPolicy Bypass -File .\bamp1.ps1 uninstall -WorkspaceRoot <ws> -SkillMode project`
-    deletes NOTHING and stops with a reason (exit 2).
-    Manual rollback (only with explicit user judgment, after backing up evidence):
-    delete <ws>\memory, <ws>\tools\memory-tool, <ws>\draft_bionic_aux_mem, and
-    (project mode) <ws parent>\.agents\skills\bam-memory.
+## Requirements / placement
 
-- <ws> = the target Bionic workspace folder (where memory / tools / draft_bionic_aux_mem are
-  placed). If a same-named directory already exists, the script STOPS (exit 2); it never
-  overwrites, migrates, or mixes.
-- Places where approval can occur: the user decision between steps 3 and 4 (the script enforces
-  the stop) / the Bionic write approval for the project skill write in step 4 (behavior on the
-  target machine unverified) / the skill.install approval if global is chosen.
-- No admin rights and no permanent security-setting changes (-ExecutionPolicy Bypass is
-  per-invocation).
+- Windows PowerShell 5.1 (the installer and the tool are 5.1-compatible).
+- Tool files: `%LOCALAPPDATA%\bam\` (default; `-ToolDir` overrides).
+- Memory root: `<workspace>\memory` (project scope; per-chat scope via
+  `-ChatRoot <scratchpad>\memory`).
+- No admin rights; `-ExecutionPolicy Bypass` is per-invocation.
 
-## Skill placement
+## Verification
 
-- PROJECT (default candidate): the script places <ws parent>\.agents\skills\bam-memory\SKILL.md
-  as an ordinary file.
-- GLOBAL: the script does NOT place it (Bionic rule: global skills only via skill.install).
-  Installing takes 1 AI message + user approval:
-  "Install @bam-memory as a global skill. SKILL.md is at <extract dir>\skill\bam-memory\SKILL.md"
-- NONE: no skill. Operate with only the (minimal) invocation contract in SKILL.md.
-- Memory scope: <ws>\memory is workspace-level and shared by all chats in that workspace
-  (project-level sharing). Per-chat memory does not exist in this Core.
-- The skill description is an instruction to the model (a soft trigger); it does not guarantee
-  session-start body reads or auto-firing. Explicit invocation `@bam-memory` is always
-  available. Do not assume the same guarantees as the source environment.
+- verify-artifact: ZIP hash vs sidecar + MANIFEST.sha256 vs all files.
+- install-mock / install: run the 33-case machine suite in isolated staging;
+  33/33 + exit 0 required.
+- After install: status-report (quick health check: placement + memory sanity;
+  exit 0 = PASS / 1 = FAIL). The full integrity check is the adapter's -Mode Validate.
+- Repository-level check (publisher side): `python tools/verify_release.py`.
 
-## Minimal live check (after install; 1 fresh chat, 1-message probe)
+## Important limits
 
-1. "Remember: BAM-P1-TEST: test-marker-alpha" -> confirm storage (tag bamp1-test, not pinned)
-2. "What is the BAM-P1 test marker?" -> expect a HIT with a 4-element citation
-3. Ask about something not stored -> expect "no record in auxiliary memory"
-4. (if the skill is placed) explicit invocation `@bam-memory` responds
-
-- Judgment is recorded from user observation + a machine manifest diff (pre/post). Never PASS on
-  self-evaluation alone.
-- Test data is identifiable by tag bamp1-test / summary prefix BAM-P1-TEST:.
-  Even after forget, the original text remains in archive and past generations; test-data
-  disposal is NOT part of the install procedure (evidence retention + explicit user approval
-  only, a separate GO).
-
-## Constraints (this distribution)
-
-- Timeouts: selftest runner 2400000 ms / single memory-tool invocation 60000 ms. A timeout on a
-  slow machine is honestly reported as FAIL (no implicit retry).
-- Test data (tag bamp1-test / BAM-P1-TEST:) keeps its original text in archive and past
-  generations even after forget. Disposal is not part of the install procedure (evidence
-  retention + explicit user approval only).
-- Skill auto-firing and target-LLM behavior are not guaranteed (explicit invocation @bam-memory
-  always available; verified only via the fresh-chat probe).
-- On FAIL / STOP the target LLM must not edit, delete, or silently retry the distribution
-  documents, hash table, or state (return machine output verbatim to the user and wait = see
-  PROCEDURE).
-- Save-then-ask within a single message is NOT a cross-session verification.
-- A machine verification PASS does not mean user acceptance
-  (MACHINE_CHECK_PASS != USER_ACCEPTANCE).
-
-## Vocabulary
-
-- BAM Status success = `PASS` (memory-tool vocabulary)
-- runner exit 0 = all machine tests PASS
-- A machine verification PASS does not mean user acceptance
-  (MACHINE_CHECK_PASS != USER_ACCEPTANCE)
-- DEV_STATE `OK` is the vocabulary of a different system (this distribution does not include
-  DEV_STATE)
-
-## Verification gate exception
-
-- `bamp1.ps1` has a UTF-8 BOM (G2 contract, retained for PowerShell 5.1 safety).
-  All other files are UTF-8 without BOM. This is mechanically checked by the MANIFEST / content
-  gates.
-
-## Language note
-
-- All files in this ZIP are English, with one exception: `payload/draft_bionic_aux_mem/02_HUMAN_GUIDANCE.md`
-  is two-part (first half English, second half the frozen Japanese original).
-  Localizing messages for user display is the job of the target LLM, not of this package.
-- In `01_...` and `04_...`, a small number of Japanese lines are kept byte-identical on purpose:
-  they are functional test-identity content (exact quoted user prompts / a verbatim task
-  contract copy). See the assembly classification table (source environment) for the full list.
+- Personal use, single writer. No network. No host hooks (skill/policy discipline
+  instead).
+- Existing workspace data stops installation (exit 2); nothing is ever overwritten or
+  merged. A shared tool dir whose tool files are byte-identical to this package is
+  reused (tool_dir_state=MATCHING); any other pre-existing tool dir stops the install
+  (exit 2, TOOL_DIR_CONFLICT).
+- Uninstall is disabled. Manual removal only (see PROCEDURE.md).
+- Machine check PASS is not user acceptance (MACHINE_CHECK_PASS != USER_ACCEPTANCE).
+- Weak local LLMs may fail to install or operate the tool correctly; a human can run the
+  fixed commands directly (no LLM required).
+- Do not store secrets or full transcripts in memory (spec FR-17 / FR-18).
+- A checksum verifies integrity, not publisher authenticity.

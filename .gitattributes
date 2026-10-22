@@ -1,6 +1,8 @@
 # Distribution files must retain the exact bytes pinned by MANIFEST.sha256.
-package/** -text
+package/** -text whitespace=cr-at-eol
 dist/** -text
+/.gitattributes text eol=lf
+/.gitignore text eol=lf
 /README.md text eol=lf
 /LICENSE text eol=lf
 /RELEASE_NOTES.md text eol=lf

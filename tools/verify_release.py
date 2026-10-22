@@ -5,8 +5,8 @@ import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "3.4"
-ZIP = ROOT / "dist" / f"bamp1-portable-v{VERSION}.zip"
+VERSION = "0.7"
+ZIP = ROOT / "dist" / f"bam-portable-v{VERSION}.zip"
 
 
 def digest(data):
@@ -44,7 +44,7 @@ def main():
             if item.is_dir():
                 continue
             path = PurePosixPath(item.filename)
-            if path.is_absolute() or ".." in path.parts or path.parts[0] != "bamp1-portable":
+            if path.is_absolute() or ".." in path.parts or path.parts[0] != "bam-portable":
                 raise ValueError("Unsafe ZIP path")
             name = "/".join(path.parts[1:])
             if name in files:
